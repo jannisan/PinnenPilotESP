@@ -4,7 +4,7 @@ Most of the mechanical parts are 3d-printed in PETG. The stl-files are included.
 Additional hardware needed:<br/>
 DC geared motor 37 mm 12 V, 66 RPM<br/>
 L298 H-bridge<br/>
-0.91 Inch 128X32 IIC I2C White OLED LCD Display<br/>
+0.91 Inch 128X32 I2C white OLED display<br/>
 ESP32 dev board<br/>
 2 ball bearings 8 * 22 * 7 mm (from inline skates)<br/>
 Wires: 13 * 5cm dupont lines female to female, 2 wires for battery with connector, 2 wires for motor<br/>
