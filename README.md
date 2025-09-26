@@ -16,4 +16,4 @@ appr. 4 m of cord<br/>
 ![IMG_20250926_113422](https://github.com/user-attachments/assets/660ce9b7-7906-4cd9-9fa0-f0f0dd629042)
 ![Screenshot_2025-09-26-14-32-38-889_org videolan vlc](https://github.com/user-attachments/assets/517e3b20-d279-4738-bdfa-d34ef4084f68)
 Use: When everything is installed and battery is connected the present magnetic heading is stored as target heading and autopilot is active. It starts moving the tiller until the target yaw rate is reached. You can connect to the wifi hotspot "ESP32-Access-Point" with password "123456789" (or change as desired) with your mobile device. Point your webbrowser to 192.178.4.1. Here you can change the target heading, deactivate the autopilot, control the motor manually, go to settings. In settings you could change some parameters and start a magnetic calibration. Settings and calibration values remain stored after poweroff. <br/>
-# Never forget your lookout, you are responsible for the navigation of your boat at all times!
+Never forget your lookout, you are responsible for the navigation of your boat at all times!
