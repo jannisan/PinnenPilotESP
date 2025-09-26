@@ -45,30 +45,33 @@ int motorSpeed = 0;
 int yrTarget = 0;
 
 // Autopilot-Statusvariablen
-float magneticHeading = 0.0; // Aktueller magnetischer Kompasskurs (roh)
-float targetHeading = 0.0; // Soll-Kurs (Manuell gesetzt oder synchronisiert)
-float headingError = 0.0; // Kursabweichung
-float gZ = 0.0; // Drehrate der Z-Achse (Kreiselinstrument)
-bool autopilotActive = true; // Steuert, ob der Autopilot aktiv ist
+float magneticHeading = 0.0;
+float targetHeading = 0.0;
+float headingError = 0.0;
+float gZ = 0.0;
+bool autopilotActive = true;
 
-// NEU: Variablen für den Komplementär-Filter zur Stabilisierung
-float complementaryHeading = 0.0; // Stabilisierter Kurs (Wird für die Steuerung verwendet!)
-const float ALPHA = 0.98;         // Filterkonstante (0.98: Gyro hat 98% Gewicht)
-// Die Zeit wird aus dem Intervall (ms) berechnet und in Sekunden umgewandelt
-const float DT = 200.0 / 1000.0; // interval (200ms) / 1000 = 0.2s
+// Komplementär-Filter
+float complementaryHeading = 0.0;
+const float ALPHA = 0.98;
+const float DT = 200.0 / 1000.0;
 
-// Toleranzbereich für die Kurskorrektur in Grad
+// Toleranzen
 float HEADING_TOLERANCE = 5.0;
-float FINE_CONTROL_THRESHOLD = 15.0; // Schwellenwert für die Feinsteuerung
-float MAX_GYRO_RATE = 60.0; // Maximale Drehrate für die Dämpfungsberechnung (je nach Gerät anpassen)
-const int MANUAL_CONTROL_SPEED = 120; // Neue Konstante für die manuelle Steuergeschwindigkeit
+float FINE_CONTROL_THRESHOLD = 15.0;
+float MAX_GYRO_RATE = 60.0;
+const int MANUAL_CONTROL_SPEED = 120;
 
-// Zeitsteuerung (nicht-blockierend)
+// Zeitsteuerung
 unsigned long previousMillis = 0;
-const long interval = 200; // Intervall für Sensorupdates in ms
+const long interval = 200;
 
-// NEU: Instanz der Preferences-Klasse
+// Preferences
 Preferences preferences;
+
+// --- NEU: Kompass-Kalibrierungswerte ---
+float offsetX = 0, offsetY = 0, offsetZ = 0;
+float scaleX = 1, scaleY = 1, scaleZ = 1;
 
 // --- Funktionendeklarationen ---
 void setupWiFi();
@@ -89,7 +92,7 @@ void setup() {
   while (!Serial);
   Serial.println("Systemstart...");
 
-  // I2C-Bus für Sensoren und Display
+  // I2C-Bus
   Wire.begin(SDA_PIN, SCL_PIN);
   mySensor.setWire(&Wire);
 
@@ -118,10 +121,11 @@ void setup() {
 
   stopMotor();
 
+
   // Gespeicherte Kalibrierungswerte laden
   loadCalibration();
 
-  // Wichtig: Initialisiere den stabilisierten Kurs mit dem geladenen/aktuellen Kurs
+  // Initialisiere den stabilisierten Kurs mit aktuellem Kurs
   readSensors();
   complementaryHeading = magneticHeading;
 
@@ -135,23 +139,16 @@ void loop() {
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
-
     readSensors();
-
     if (autopilotActive) {
       controlMotor();
-    } else {
-      // Wenn AP inaktiv, stoppen wir den Motor, es sei denn ein manueller Befehl ist aktiv
-      //stopMotor();
     }
-
     updateOLED();
   }
   handleWebServer();
 }
 
-// --- Hilfsfunktionen ---
-
+// --- WiFi ---
 void setupWiFi() {
   Serial.print("Access Point wird gestartet...");
   WiFi.softAP(ssid, password);
@@ -161,152 +158,128 @@ void setupWiFi() {
   server.begin();
 }
 
+// --- Preferences ---
 void saveCalibration() {
   preferences.begin("compass_cal", false);
   preferences.putFloat("target_h", targetHeading);
   preferences.putFloat("tol", HEADING_TOLERANCE);
   preferences.putFloat("thresh", FINE_CONTROL_THRESHOLD);
   preferences.putFloat("gyro_r", MAX_GYRO_RATE);
+  preferences.putFloat("offX", offsetX);
+  preferences.putFloat("offY", offsetY);
+  preferences.putFloat("offZ", offsetZ);
+  preferences.putFloat("sclX", scaleX);
+  preferences.putFloat("sclY", scaleY);
+  preferences.putFloat("sclZ", scaleZ);
   preferences.end();
   Serial.println("Kalibrierungsdaten gespeichert.");
 }
 
 void loadCalibration() {
   preferences.begin("compass_cal", true);
-  // Wenn die Werte nicht existieren, werden die Standardwerte beibehalten
   targetHeading = preferences.getFloat("target_h", targetHeading);
   HEADING_TOLERANCE = preferences.getFloat("tol", HEADING_TOLERANCE);
   FINE_CONTROL_THRESHOLD = preferences.getFloat("thresh", FINE_CONTROL_THRESHOLD);
   MAX_GYRO_RATE = preferences.getFloat("gyro_r", MAX_GYRO_RATE);
+  offsetX = preferences.getFloat("offX", 0.0);
+  offsetY = preferences.getFloat("offY", 0.0);
+  offsetZ = preferences.getFloat("offZ", 0.0);
+  scaleX = preferences.getFloat("sclX", 1.0);
+  scaleY = preferences.getFloat("sclY", 1.0);
+  scaleZ = preferences.getFloat("sclZ", 1.0);
   preferences.end();
   Serial.println("Kalibrierungsdaten geladen.");
 }
 
-
+// --- Echte Kompass-Kalibrierung ---
 void calibrateCompass() {
-  Serial.println("\n--- Kompass Kalibrierung starten ---");
-  Serial.println("Der Zielkurs wird mit dem aktuellen Kurs synchronisiert.");
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println("Syncing...");
-  display.setCursor(0, 16);
-  display.println("Target Course");
-  display.display();
 
-  readSensors();
-  // Nutze den stabilisierten Kurs als neuen Soll-Kurs
-  targetHeading = complementaryHeading;
 
-  // Speichere den neuen Zielkurs sofort
+  float minX = 9999, minY = 9999, minZ = 9999;
+  float maxX = -9999, maxY = -9999, maxZ = -9999;
+
+  unsigned long startTime = millis();
+  while (millis() - startTime < 20000) { // 20 Sekunden
+    mySensor.magUpdate();
+    float x = mySensor.magX();
+    float y = mySensor.magY();
+    float z = mySensor.magZ();
+
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (z < minZ) minZ = z;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+    if (z > maxZ) maxZ = z;
+
+    delay(100);
+    long remaining = (20000 - (millis() - startTime)) / 1000;
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Cal...");
+    display.setCursor(0, 16);
+    display.print("Time: ");
+    display.print(remaining);
+    display.display();
+  }
+
+  // Hard-Iron Offsets
+  offsetX = (maxX + minX) / 2.0;
+  offsetY = (maxY + minY) / 2.0;
+  offsetZ = (maxZ + minZ) / 2.0;
+
+  // Soft-Iron Skalierung
+  float avgDelta = ((maxX - minX) + (maxY - minY) + (maxZ - minZ)) / 3.0;
+  scaleX = avgDelta / (maxX - minX);
+  scaleY = avgDelta / (maxY - minY);
+  scaleZ = avgDelta / (maxZ - minZ);
+
   saveCalibration();
 
-  Serial.print("Soll-Kurs auf ");
-  Serial.print(targetHeading);
-  Serial.println(" Grad festgelegt.");
+  Serial.println("Kalibrierung abgeschlossen.");
+  Serial.printf("Offsets: X=%.2f Y=%.2f Z=%.2f\n", offsetX, offsetY, offsetZ);
+  Serial.printf("Scales : X=%.3f Y=%.3f Z=%.3f\n", scaleX, scaleY, scaleZ);
 
-  // Kurzzeitige Bestätigung auf dem OLED-Display
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.println("Sync Done!");
+  display.println("Calibration");
+  display.setCursor(0, 16);
+  display.println("Done!");
   display.display();
 }
 
-// ----------------------------------------------------------------
-// MODIFIZIERTE FUNKTION MIT KOMPLEMENTÄR-FILTER
-// ----------------------------------------------------------------
+// --- Sensoren ---
 void readSensors() {
-  // Magnetometer-Daten aktualisieren
   mySensor.magUpdate();
 
-  // Manuelle Kompass-Berechnung mit magX() und magY()
-  magneticHeading = atan2(-mySensor.magX(), -mySensor.magY()) * 180 / PI;
+  // Rohdaten + Hard/Soft-Iron Korrektur
+  float x = (mySensor.magX() - offsetX) * scaleX;
+  float y = (mySensor.magY() - offsetY) * scaleY;
+  float z = (mySensor.magZ() - offsetZ) * scaleZ;
 
-  // Normalisierung des Kompasskurses auf 0-360 Grad
+  magneticHeading = atan2(-x, -y) * 180 / PI;
   if (magneticHeading < 0) {
     magneticHeading += 360;
   }
 
-  // Gyroskop-Daten aktualisieren
+  // Gyro
   mySensor.gyroUpdate();
-  gZ = mySensor.gyroZ(); // Drehrate um die Z-Achse in Grad/Sekunde
+  gZ = mySensor.gyroZ();
 
-  // --- KOMPLEMENTÄR-FILTER (Stabilisierung) ---
-
-  // 1. Gyro-Teil: Geschätzte Position durch Integration der Gyro-Rate
+  // Komplementär-Filter
   float gyroRateTerm = complementaryHeading + gZ * DT;
-
-  // 2. Fehlerberechnung: Finde den kürzesten Weg zwischen dem Kompass-Kurs und der Gyro-Prognose
   float error = magneticHeading - gyroRateTerm;
   if (error > 180) error -= 360;
   if (error < -180) error += 360;
 
-  // 3. Fusion: Gyro-Prognose (ALPHA) + Kompass-Korrektur (1 - ALPHA)
   complementaryHeading = gyroRateTerm + (1.0 - ALPHA) * error;
-
-  // Normalisierung des stabilisierten Kurses (0 bis 360 Grad)
   if (complementaryHeading >= 360.0) complementaryHeading -= 360.0;
   if (complementaryHeading < 0.0) complementaryHeading += 360.0;
 }
-// ----------------------------------------------------------------
 
-// ----------------------------------------------------------------
-// MODIFIZIERTE FUNKTION FÜR STEUERUNG MIT STABILISIERTEM KURS
-// ----------------------------------------------------------------
-void controlMotor() {
-  // P-Regler-Logik für kontinuierliche Korrektur
-  // WICHTIG: Verwende complementaryHeading (den stabilisierten Kurs)
-  headingError = complementaryHeading - targetHeading;
-  if (headingError > 180) {
-    headingError -= 360;
-  }
-  if (headingError < -180) {
-    headingError += 360;
-  }
-
-  // Abweichung von mehr als 15 Grad (Feinsteuerungs-Schwelle)
-  if (abs(headingError) > FINE_CONTROL_THRESHOLD) {
-    // Aggressive Steuerung (P-Regler) bei großer Abweichung
-    motorSpeed = maxMotorSpeed;
-    if (headingError > 0) {
-      yrTarget = - 5;
-      //turnLeft(motorSpeed);
-    } else {
-      yrTarget = 5;
-      //turnRight(motorSpeed);
-    }
-    startMotor(motorSpeed);
-  }
-  // Abweichung zwischen 5 und 15 Grad (sanfte Steuerung)
-  else if (abs(headingError) > HEADING_TOLERANCE) {
-    //motorSpeed = int(map(abs(headingError), HEADING_TOLERANCE, FINE_CONTROL_THRESHOLD, 5, maxMotorSpeed));
-    motorSpeed = int(maxMotorSpeed / 2);
-    if (headingError > 0) {
-      yrTarget = - 2;
-      //turnLeft(motorSpeed);
-    } else {
-      yrTarget = 2;
-      //turnRight(motorSpeed);
-    }
-    startMotor(motorSpeed);
-  }
-  // Abweichung weniger als 5 Grad (Dämpfung durch Gyro)
-  else {
-    // Gyroskop-basierte Dämpfung, um ein Überschwingen zu verhindern
-    // Steuerung basierend auf der Drehrate gZ
-    yrTarget = 0;
-    if (abs(gZ) > 1.5) { // Kleiner Schwellenwert, um Rauschen zu ignorieren
-      motorSpeed = int(maxMotorSpeed / 2);
-      startMotor(motorSpeed);
-    }
-    else {
-      stopMotor();
-    }
-  }
-}
-// ----------------------------------------------------------------
-
+// --- Motorsteuerung ---
 void stopMotor() {
-  ledcWrite(enable1Pin, 0);
+  ledcWrite(pwmChannel, 0);
   digitalWrite(motor1Pin1, LOW);
   digitalWrite(motor1Pin2, LOW);
 }
@@ -314,52 +287,70 @@ void stopMotor() {
 void turnLeft(int speed) {
   digitalWrite(motor1Pin1, HIGH);
   digitalWrite(motor1Pin2, LOW);
-  ledcWrite(enable1Pin, 255 - speed);
+  ledcWrite(pwmChannel, 255 - speed);
 }
 
 void turnRight(int speed) {
   digitalWrite(motor1Pin1, LOW);
   digitalWrite(motor1Pin2, HIGH);
-  ledcWrite(enable1Pin, speed);
+  ledcWrite(pwmChannel, speed);
 }
 
-
 void startMotor(int speed) {
-  if (yrTarget > gZ)
-  {
+  if (yrTarget > gZ) {
     digitalWrite(motor1Pin1, LOW);
     digitalWrite(motor1Pin2, HIGH);
-    ledcWrite(enable1Pin, speed);
+    ledcWrite(pwmChannel, speed);
     Serial.print("R");
-  }
-  else
-  {
+  } else {
     digitalWrite(motor1Pin1, HIGH);
     digitalWrite(motor1Pin2, LOW);
-    ledcWrite(enable1Pin, 255 - speed);
+    ledcWrite(pwmChannel, 255 - speed);
     Serial.print("L");
   }
   Serial.println(speed);
   Serial.println(yrTarget);
 }
 
+// --- Autopilot ---
+void controlMotor() {
+  headingError = complementaryHeading - targetHeading;
+  if (headingError > 180) headingError -= 360;
+  if (headingError < -180) headingError += 360;
 
+  if (abs(headingError) > FINE_CONTROL_THRESHOLD) {
+    motorSpeed = maxMotorSpeed;
+    yrTarget = (headingError > 0) ? -5 : 5;
+    startMotor(motorSpeed);
+  } else if (abs(headingError) > HEADING_TOLERANCE) {
+    motorSpeed = int(maxMotorSpeed / 2);
+    yrTarget = (headingError > 0) ? -2 : 2;
+    startMotor(motorSpeed);
+  } else {
+    yrTarget = 0;
+    if (abs(gZ) > 1.5) {
+      motorSpeed = int(maxMotorSpeed / 2);
+      startMotor(motorSpeed);
+    } else {
+      stopMotor();
+    }
+  }
+}
+
+// --- OLED ---
 void updateOLED() {
-  // Erstellt Zeichen-Arrays, um die dreistellige Formatierung zu speichern
-  char chStr[4]; // NEU: complementaryHeading
+  char chStr[4];
   char thStr[4];
   char gzStr[4];
 
-  // Konvertiert die float-Werte in dreistellige Strings mit führenden Nullen
-  // Wichtig: Zeige den stabilisierten Kurs (chStr) auf dem Display an
   sprintf(chStr, "%03d", (int)complementaryHeading);
   sprintf(thStr, "%03d", (int)targetHeading);
   sprintf(gzStr, "%02d", (int)gZ);
 
   display.clearDisplay();
   display.setCursor(0, 0);
-  display.print("MH"); 
-  display.print(chStr); // Change: Zeigt den stabilisierten Kurs an
+  display.print("MH");
+  display.print(chStr);
   display.println(autopilotActive ? " HDG" : " MAN");
   display.setCursor(0, 16);
   display.print("MC");
@@ -369,6 +360,7 @@ void updateOLED() {
   display.display();
 }
 
+// --- Webserver ---
 void handleWebServer() {
   WiFiClient client = server.available();
   if (!client) {
@@ -544,7 +536,7 @@ void handleWebServer() {
     client.println("<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-s cal e=1'><meta http-equiv='refresh' content='5'><style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;} body { margin: 0; padding: 20px;} .button { border: none; color: white; padding: 16px 40px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; border-radius: 8px;} .button-container { display: flex; justify-content: center; gap: 10px;}.green-button {background-color: #4CAF50;}.red-button {background-color: #f44336;}.status-text {font-size: 1.5em;} input[type=number] { width: 80px; padding: 5px; margin: 5px; font-size: 1em;}.form-container {display: flex; flex-direction: column; align-items: center; gap: 10px; border: 2px solid #ccc; padding: 10px; border-radius: 8px;}</style></head><body>");
 
     // Anzeige des Status in fünf separaten Zeilen
-    client.println("<p style='font-size: 2em; font-weight: bold;'>CH: " + String(chStr) + "</p>");
+    client.println("<p style='font-size: 2em; font-weight: bold;'>MH: " + String(chStr) + "</p>");
     client.println("<p style='font-size: 2em; font-weight: bold;'>steer: " + String(thStr) + "</p>");
     client.println("<p style='font-size: 2em; font-weight: bold;'>AP: " + String(autopilotActive ? "ON" : "OFF") + "</p>");
     client.println("<p class='button-container'>");
