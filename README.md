@@ -1,2 +1,3 @@
 # PinnenPilotESP
-Project of an autopilot for small boats
+An autopilot for small boats
+This project aims to build a simple autopilot, which is able to maintain the magnetic heading. It uses an MPU9250 sensor, a geared DC motor as an actuator and an and an ESP32 development board as a processor with wifi interface. The motor drives a shaft, which moves the tiller by strings. The ESP generates a wifi AP with webserver, which enables to control the autopilot with a mobile device. The ESP also calculates a target yaw rate from the difference between actual heading and target heading and gives commands to the motor via a L298N module.
