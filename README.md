@@ -6,7 +6,7 @@ DC geared motor 37 mm 12 V, 66 RPM<br/>
 L298 H-bridge<br/>
 0.91 Inch 128X32 IIC I2C White OLED LCD Display<br/>
 ESP32 dev board<br/>
-2 ball bearings 8mm*22mm*7mm (from inline skates)<br/>
+2 ball bearings 8 * 22 * 7 mm (from inline skates)<br/>
 Wires: short dupont lines female to female, 2 wires for battery with connector, 2 wires for motor<br/>
 3S Lipo battery or similar (6-12V)<br/>
 3 screws <br/>
