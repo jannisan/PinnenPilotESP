@@ -41,8 +41,10 @@ const int freq = 10000;
 const int pwmChannel = 0;
 const int resolution = 8;
 const int maxMotorSpeed = 255; // Maximaler PWM-Wert für 8-Bit-Auflösung
+const int MANUAL_CONTROL_SPEED = 120;
 int motorSpeed = 0;
 int yrTarget = 0;
+
 
 // Autopilot-Statusvariablen
 float magneticHeading = 0.0;
@@ -60,7 +62,7 @@ const float DT = 200.0 / 1000.0;
 float HEADING_TOLERANCE = 5.0;
 float FINE_CONTROL_THRESHOLD = 15.0;
 float MAX_GYRO_RATE = 60.0;
-const int MANUAL_CONTROL_SPEED = 120;
+
 
 // Zeitsteuerung
 unsigned long previousMillis = 0;
@@ -128,11 +130,10 @@ void setup() {
   // Initialisiere den stabilisierten Kurs mit aktuellem Kurs
   readSensors();
   complementaryHeading = magneticHeading;
+  targetHeading = complementaryHeading;
 
   // WiFi-Access-Point starten
   setupWiFi();
-
-  Serial.println("System ist bereit. Autopilot inaktiv.");
 }
 
 void loop() {
@@ -191,7 +192,7 @@ void loadCalibration() {
   Serial.println("Kalibrierungsdaten geladen.");
 }
 
-// --- Echte Kompass-Kalibrierung ---
+// Kompass-Kalibrierung ---
 void calibrateCompass() {
 
 
@@ -244,8 +245,9 @@ void calibrateCompass() {
   display.setCursor(0, 0);
   display.println("Calibration");
   display.setCursor(0, 16);
-  display.println("Done!");
+  display.println("done!");
   display.display();
+  delay(1000);
 }
 
 // --- Sensoren ---
@@ -273,8 +275,8 @@ void readSensors() {
   if (error < -180) error += 360;
 
   complementaryHeading = gyroRateTerm + (1.0 - ALPHA) * error;
-  if (complementaryHeading >= 360.0) complementaryHeading -= 360.0;
-  if (complementaryHeading < 0.0) complementaryHeading += 360.0;
+  if (complementaryHeading >= 360) complementaryHeading -= 360;
+  if (complementaryHeading < 0) complementaryHeading += 360;
 }
 
 // --- Motorsteuerung ---
@@ -314,24 +316,49 @@ void startMotor(int speed) {
 
 // --- Autopilot ---
 void controlMotor() {
+  // P-Regler-Logik für kontinuierliche Korrektur
   headingError = complementaryHeading - targetHeading;
-  if (headingError > 180) headingError -= 360;
-  if (headingError < -180) headingError += 360;
+  if (headingError > 180) {
+    headingError -= 360;
+  }
+  if (headingError < -180) {
+    headingError += 360;
+  }
 
   if (abs(headingError) > FINE_CONTROL_THRESHOLD) {
+    // Aggressive Steuerung (P-Regler) bei großer Abweichung
     motorSpeed = maxMotorSpeed;
-    yrTarget = (headingError > 0) ? -5 : 5;
+    if (headingError > 0) {
+      yrTarget = - 5;
+      //turnLeft(motorSpeed);
+    } else {
+      yrTarget = 5;
+      //turnRight(motorSpeed);
+    }
     startMotor(motorSpeed);
-  } else if (abs(headingError) > HEADING_TOLERANCE) {
+  }
+  // Abweichung zwischen 5 und 15 Grad (sanfte Steuerung)
+  else if (abs(headingError) > HEADING_TOLERANCE) {
     motorSpeed = int(maxMotorSpeed / 2);
-    yrTarget = (headingError > 0) ? -2 : 2;
+    if (headingError > 0) {
+      yrTarget = - 2;
+      //turnLeft(motorSpeed);
+    } else {
+      yrTarget = 2;
+      //turnRight(motorSpeed);
+    }
     startMotor(motorSpeed);
-  } else {
+  }
+  // Abweichung weniger als 5 Grad (Dämpfung durch Gyro)
+  else {
+    // Gyroskop-basierte Dämpfung, um ein Überschwingen zu verhindern
+    // Steuerung basierend auf der Drehrate gZ
     yrTarget = 0;
-    if (abs(gZ) > 1.5) {
+    if (abs(gZ) > 1.5) { // Kleiner Schwellenwert, um Rauschen zu ignorieren
       motorSpeed = int(maxMotorSpeed / 2);
       startMotor(motorSpeed);
-    } else {
+    }
+    else {
       stopMotor();
     }
   }
@@ -424,15 +451,7 @@ void handleWebServer() {
       MAX_GYRO_RATE = gyroRateStr.toFloat();
     }
 
-    // NEU: Speichere die aktualisierten Werte
     saveCalibration();
-
-    Serial.print("Toleranz aktualisiert auf: ");
-    Serial.println(HEADING_TOLERANCE);
-    Serial.print("Schwellenwert aktualisiert auf: ");
-    Serial.println(FINE_CONTROL_THRESHOLD);
-    Serial.print("Max. Gyro-Rate aktualisiert auf: ");
-    Serial.println(MAX_GYRO_RATE);
   }
 
   // --- Verarbeite die Befehle basierend auf der requestLine ---
@@ -550,7 +569,7 @@ void handleWebServer() {
     client.println("<a href='/toggle'><button class='button " + apButtonClass + "'>AP on/off</button></a>");
     client.println("</p>");
 
-    // Neue Buttons, nur im AP off-Modus anzeigen
+    //Buttons, nur im AP off-Modus anzeigen
     if (!autopilotActive) {
       client.println("<p class='button-container'>");
       client.println("<a href='/left'><button class='button green-button'>L</button></a>");
@@ -559,7 +578,7 @@ void handleWebServer() {
       client.println("</p>");
     }
 
-    // Neuer Settings-Button
+    //Settings-Button
     client.println("<hr>");
     client.println("<p class='button-container'>");
     client.println("<a href='/settings'><button class='button green-button'>Settings</button></a>");
