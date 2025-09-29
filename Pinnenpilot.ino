@@ -430,7 +430,7 @@ void handleWebServer() {
       if (andIndex != -1) {
         toleranceStr = toleranceStr.substring(0, andIndex);
       }
-      HEADING_TOLERANCE = toleranceStr.toFloat();
+      HEADING_TOLERANCE = toleranceStr.toInt();
     }
 
     int thresholdIndex = postData.indexOf("threshold=");
@@ -440,13 +440,13 @@ void handleWebServer() {
       if (andIndex != -1) {
         thresholdStr = thresholdStr.substring(0, andIndex);
       }
-      FINE_CONTROL_THRESHOLD = thresholdStr.toFloat();
+      FINE_CONTROL_THRESHOLD = thresholdStr.toInt();
     }
 
     int gyroRateIndex = postData.indexOf("gyro_rate=");
     if (gyroRateIndex != -1) {
       String gyroRateStr = postData.substring(gyroRateIndex + 10);
-      MAX_GYRO_RATE = gyroRateStr.toFloat();
+      MAX_GYRO_RATE = gyroRateStr.toInt();
     }
 
     saveCalibration();
@@ -515,21 +515,21 @@ void handleWebServer() {
   // HTML für die Settings-Seite
   if (requestLine.indexOf("GET /settings") >= 0) {
     // KEIN REFRESH-TAG
-    client.println("<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;} body { margin: 0; padding: 20px;} .button { border: none; color: white; padding: 16px 40px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; border-radius: 8px;} .button-container { display: flex; justify-content: center; gap: 10px;}.green-button {background-color: #4CAF50;}.red-button {background-color: #f44336;}.status-text {font-size: 1.5em;} input[type=number] { width: 80px; padding: 5px; margin: 5px; font-size: 1em;}.form-container {display: flex; flex-direction: column; align-items: center; gap: 10px; border: 2px solid #ccc; padding: 10px; border-radius: 8px;}</style></head><body>");
+    client.println("<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'><style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;} body { margin: 0; padding: 20px;} .button { border: none; color: white; padding: 16px 40px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; border-radius: 8px;} .button-container { display: flex; justify-content: center; gap: 10px;}.green-button {background-color: #4CAF50;}.red-button {background-color: #f44336;}.blue-button {background-color: #008CBA;}.status-text {font-size: 1.5em;} input[type=number] { width: 80px; padding: 5px; margin: 5px; font-size: 1em;}.form-container {display: flex; flex-direction: column; align-items: center; gap: 10px; border: 2px solid #ccc; padding: 10px; border-radius: 8px;}</style></head><body>");
 
-    client.println("<h2>set PID-parameters</h2>");
+    client.println("<h2>Settings</h2>");
     client.println("<form action='/' method='POST' class='form-container'>");
     client.println("<label for='tolerance'>MH-tolerance (&deg;):</label>");
-    client.println("<input type='number' step='0.1' name='tolerance' value='" + String(HEADING_TOLERANCE) + "' required>");
+    client.println("<input type='number'  name='tolerance' value='" + String(HEADING_TOLERANCE) + "' required>");
     client.println("<label for='threshold'>threshold finecontrol (&deg;):</label>");
-    client.println("<input type='number' step='0.1' name='threshold' value='" + String(FINE_CONTROL_THRESHOLD) + "' required>");
+    client.println("<input type='number' name='threshold' value='" + String(FINE_CONTROL_THRESHOLD) + "' required>");
     client.println("<label for='gyro_rate'>max. gyrorate (&deg;/s):</label>");
-    client.println("<input type='number' step='0.1' name='gyro_rate' value='" + String(MAX_GYRO_RATE) + "' required>");
+    client.println("<input type='number' name='gyro_rate' value='" + String(MAX_GYRO_RATE) + "' required>");
     client.println("<button type='submit' class='button green-button'>save</button>");
     client.println("</form>");
 
     client.println("<p class='button-container' style='margin-top: 20px;'>");
-    client.println("<a href='/calibrate'><button class='button green-button'>Calibrate Compass</button></a>");
+    client.println("<a href='/calibrate'><button class='button blue-button'>calibrate compass</button></a>");
     client.println("<a href='/'><button class='button green-button'>back</button></a>");
     client.println("</p>");
 
@@ -550,18 +550,18 @@ void handleWebServer() {
     sprintf(thStr, "%03d", (int)targetHeading);
 
     // HIER WIRD DER REFRESH-TAG EINGEFÜGT
-    client.println("<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-s cal e=1'><meta http-equiv='refresh' content='5'><style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;} body { margin: 0; padding: 20px;} .button { border: none; color: white; padding: 16px 40px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; border-radius: 8px;} .button-container { display: flex; justify-content: center; gap: 10px;}.green-button {background-color: #4CAF50;}.red-button {background-color: #f44336;}.status-text {font-size: 1.5em;} input[type=number] { width: 80px; padding: 5px; margin: 5px; font-size: 1em;}.form-container {display: flex; flex-direction: column; align-items: center; gap: 10px; border: 2px solid #ccc; padding: 10px; border-radius: 8px;}</style></head><body>");
+    client.println("<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-s cal e=1'><meta http-equiv='refresh' content='5'><style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;} body { margin: 0; padding: 20px;} .button { border: none; color: white; padding: 16px 40px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; border-radius: 8px;} .button-container { display: flex; justify-content: center; gap: 10px;}.green-button {background-color: #4CAF50;}.red-button {background-color: #f44336;}.blue-button {background-color: #008CBA;}.status-text {font-size: 1.5em;} input[type=number] { width: 80px; padding: 5px; margin: 5px; font-size: 1em;}.form-container {display: flex; flex-direction: column; align-items: center; gap: 10px; border: 2px solid #ccc; padding: 10px; border-radius: 8px;}</style></head><body>");
 
     // Anzeige des Status in fünf separaten Zeilen
     client.println("<p style='font-size: 2em; font-weight: bold;'>MH: " + String(chStr) + "</p>");
-    client.println("<p style='font-size: 2em; font-weight: bold;'>steer: " + String(thStr) + "</p>");
+    client.println("<p style='font-size: 2em; font-weight: bold;'>target: " + String(thStr) + "</p>");
     client.println("<p style='font-size: 2em; font-weight: bold;'>AP: " + String(autopilotActive ? "ON" : "OFF") + "</p>");
     client.println("<p class='button-container'>");
     client.println("<a href='/minus'><button class='button green-button'>-10&deg;</button></a>");
     client.println("<a href='/plus'><button class='button green-button'>+10&deg;</button></a>");
     client.println("</p>");
     client.println("<p class='button-container'>");
-    client.println("<a href='/sync'><button class='button green-button'>Sync Kurs</button></a>");
+    client.println("<a href='/sync'><button class='button green-button'>sync MH</button></a>");
     client.println("</p>");
     client.println("<p class='button-container'>");
     client.println("<a href='/toggle'><button class='button " + apButtonClass + "'>AP on/off</button></a>");
@@ -579,7 +579,7 @@ void handleWebServer() {
     //Settings-Button
     client.println("<hr>");
     client.println("<p class='button-container'>");
-    client.println("<a href='/settings'><button class='button green-button'>Settings</button></a>");
+    client.println("<a href='/settings'><button class='button blue-button'>settings</button></a>");
     client.println("</p>");
 
     client.println("</body></html>");
