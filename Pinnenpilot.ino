@@ -41,7 +41,7 @@ const int freq = 10000;
 const int pwmChannel = 0;
 const int resolution = 8;
 const int maxMotorSpeed = 255; // Maximaler PWM-Wert für 8-Bit-Auflösung
-const int MANUAL_CONTROL_SPEED = 120;
+const int manMotorSpeed = 120; // PWM-Wert im manuellen Modus 
 int motorSpeed = 0;
 int yrTarget = 0;
 
@@ -83,8 +83,8 @@ void updateOLED();
 void handleWebServer();
 void calibrateCompass();
 void stopMotor();
-void turnLeft(int speed);
-void turnRight(int speed);
+void turnLeft();
+void turnRight();
 void startMotor(int speed);
 void saveCalibration();
 void loadCalibration();
@@ -117,17 +117,15 @@ void setup() {
   // Motor-Setup
   pinMode(motor1Pin1, OUTPUT);
   pinMode(motor1Pin2, OUTPUT);
-
   // Konfiguriert den Pin direkt als PWM-Ausgang
   ledcAttachChannel(enable1Pin, freq, resolution, pwmChannel);
 
   stopMotor();
-
-
+  
   // Gespeicherte Kalibrierungswerte laden
   loadCalibration();
 
-  // Initialisiere den stabilisierten Kurs mit aktuellem Kurs
+  // Initialisiere den stabilisierten Kurs und Sollkurs mit aktuellem Kurs
   readSensors();
   complementaryHeading = magneticHeading;
   targetHeading = complementaryHeading;
@@ -281,33 +279,33 @@ void readSensors() {
 
 // --- Motorsteuerung ---
 void stopMotor() {
-  ledcWrite(pwmChannel, 0);
+  ledcWrite(enable1Pin, 0);
   digitalWrite(motor1Pin1, LOW);
   digitalWrite(motor1Pin2, LOW);
 }
 
-void turnLeft(int speed) {
+void turnLeft() {
   digitalWrite(motor1Pin1, HIGH);
   digitalWrite(motor1Pin2, LOW);
-  ledcWrite(pwmChannel, 255 - speed);
+  ledcWrite(enable1Pin, 255 - manMotorSpeed);
 }
 
-void turnRight(int speed) {
+void turnRight() {
   digitalWrite(motor1Pin1, LOW);
   digitalWrite(motor1Pin2, HIGH);
-  ledcWrite(pwmChannel, speed);
+  ledcWrite(enable1Pin, manMotorSpeed);
 }
 
 void startMotor(int speed) {
   if (yrTarget > gZ) {
     digitalWrite(motor1Pin1, LOW);
     digitalWrite(motor1Pin2, HIGH);
-    ledcWrite(pwmChannel, speed);
+    ledcWrite(enable1Pin, speed);
     Serial.print("R");
   } else {
     digitalWrite(motor1Pin1, HIGH);
     digitalWrite(motor1Pin2, LOW);
-    ledcWrite(pwmChannel, 255 - speed);
+    ledcWrite(enable1Pin, 255 - speed);
     Serial.print("L");
   }
   Serial.println(speed);
@@ -460,13 +458,13 @@ void handleWebServer() {
   // Manuelle Buttons (nur im AP off-Modus)
   if (!autopilotActive) {
     if (requestLine.indexOf("GET /left") >= 0) {
-      turnLeft(MANUAL_CONTROL_SPEED);
+      turnLeft();
       commandExecuted = true;
     } else if (requestLine.indexOf("GET /stop") >= 0) {
       stopMotor();
       commandExecuted = true;
     } else if (requestLine.indexOf("GET /right") >= 0) {
-      turnRight(MANUAL_CONTROL_SPEED);
+      turnRight();
       commandExecuted = true;
     }
   }
